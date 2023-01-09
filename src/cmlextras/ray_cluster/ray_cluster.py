@@ -13,18 +13,19 @@
 import os
 import cdsw
 
-DEFAULT_DASHBOARD_PORT = os.environ['CDSW_APP_PORT']
+DEFAULT_DASHBOARD_PORT = os.environ['CDSW_READONLY_PORT']
 
 class RayCluster():
     """Ray Cluster built on CML Worker infrastructure"""
 
-    def __init__(self, num_workers, worker_cpu=2, worker_memory=4, head_cpu=2, head_memory=4, dashboard_port=DEFAULT_DASHBOARD_PORT, env
+    def __init__(self, num_workers, worker_cpu=2, worker_memory=4, head_cpu=2, head_memory=4, include_dashboard=True, dashboard_port=DEFAULT_DASHBOARD_PORT, env
 ={}):
         self.num_workers = num_workers
         self.worker_cpu = worker_cpu
         self.worker_memory = worker_memory
         self.head_cpu = head_cpu
         self.head_memory = head_memory
+        self.include_dashboard = include_dashboard
         self.dashboard_port = dashboard_port
         self.env = env
 
@@ -34,7 +35,12 @@ class RayCluster():
 
     def _start_ray_head(self):
         # We need to start the ray process with --block else the command completes and the CML Worker terminates
-        head_start_cmd = f"!ray start --head --block --disable-usage-stats --num-cpus={self.head_cpu} --include-dashboard=true --dashboard-port={self.dashboard_port}"
+        head_start_cmd = f"!ray start --head --block --disable-usage-stats --num-cpus={self.head_cpu}"
+
+        if self.include_dashboard:
+            head_start_cmd +=  f" --include-dashboard=true --dashboard-port={self.dashboard_port}"
+        else:
+            head_start_cmd += f" --include-dashboard=false"
 
         args = {
             'n': 1,
@@ -116,7 +122,12 @@ use the following Python code:
         Return the Ray dashboard url.
         """
         try:
-            return self.ray_head_details['workers'][0]['app_url']
+            if not self.include_dashboard:
+                return "# dashboard is not disabled."
+
+            url = self.ray_head_details['workers'][0]['app_url']
+            # The dashboard running on CDSW_READONLY_PORT is exposed on a 'read-only-' url
+            return url[:8] + 'read-only-' + url[8:]
         except Error as error:
             raise Error("ERROR: Ray cluster is not running!")
 
